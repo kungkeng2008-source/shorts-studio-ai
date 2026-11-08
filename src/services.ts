@@ -303,7 +303,7 @@ export async function searchPixabay(apiKey: string, query: string): Promise<Medi
   const videoCacheKey = "shorts-media-cache:pixabay-videos:" + term.toLowerCase();
   const cachedImages = readMediaCache<MediaAsset[]>(imageCacheKey);
   const cachedVideos = readMediaCache<MediaAsset[]>(videoCacheKey);
-  if (cachedImages || cachedVideos) return [...(cachedImages || []), ...(cachedVideos || [])];
+  if (cachedImages !== null && cachedVideos !== null) return [...cachedImages, ...cachedVideos];
 
   const q = encodeURIComponent(term);
   const imageUrl = "https://pixabay.com/api/?key=" + encodeURIComponent(key) +
