@@ -227,12 +227,12 @@ function App() {
     scenes.forEach(scene => {
       const duration = Math.max(1, Number(scene.duration) || 1);
       if (scene.narration.trim()) {
-        blocks.push(index + "\\n" + stamp(cursor) + " --> " + stamp(cursor + duration) + "\\n" + scene.narration.trim());
+        blocks.push(index + "\n" + stamp(cursor) + " --> " + stamp(cursor + duration) + "\n" + scene.narration.trim());
         index++;
       }
       cursor += duration;
     });
-    saveBlob(new Blob([blocks.join("\\n\\n")], { type: "text/plain;charset=utf-8" }), slugify(project.title) + ".srt");
+    saveBlob(new Blob([blocks.join("\n\n")], { type: "text/plain;charset=utf-8" }), slugify(project.title) + ".srt");
     setLastExport("SRT subtitles downloaded");
   };
 
