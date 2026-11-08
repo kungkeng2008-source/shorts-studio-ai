@@ -3,7 +3,7 @@ import {
   Atom, AudioLines, BookOpen, Check, Clapperboard, Copy, Download, Film,
   Image as ImageIcon, LoaderCircle, Menu, Mic2, Play, Search, Sparkles,
   WandSparkles, X, Plus, Trash2, Save, Smartphone, Monitor, Music2,
-  Layers3, Upload, Volume2, RotateCcw
+  Layers3, Upload, Volume2, RotateCcw, FileText
 } from "lucide-react";
 import { generateLocalProject, saveBlob, type Scene, type VideoProject, type MediaAsset } from "./services";
 import { SOUND_PRESETS, findSoundPresets, createBuiltInSoundTrack } from "./sounds";
