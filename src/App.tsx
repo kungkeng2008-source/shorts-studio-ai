@@ -8,13 +8,14 @@ import {
 } from "lucide-react";
 import {
   generateProject, generateVoice, searchPixabay, searchUnsplash,
-  searchFreesound, trackUnsplashDownload, saveBlob,
+  trackUnsplashDownload, saveBlob,
   type Scene, type VideoProject, type MediaAsset
 } from "./services";
+import { SOUND_PRESETS, findSoundPresets, createBuiltInSoundTrack } from "./sounds";
 import { renderBrowserVideo, createThumbnail } from "./renderer";
 
 type Style = "Isometric 3D" | "Cartoon Explainer" | "Blueprint" | "Hologram HUD" | "3D Data Chart" | "Paper Cutout";
-type Keys = { gemini: string; pixabay: string; unsplash: string; freesound: string };
+type Keys = { gemini: string; pixabay: string; unsplash: string };
 type Page = "Studio" | "Discover" | "Storyboard" | "Media" | "Voice" | "Export";
 const styleOptions: Style[] = ["Isometric 3D", "Cartoon Explainer", "Blueprint", "Hologram HUD", "3D Data Chart", "Paper Cutout"];
 const defaultProject: VideoProject = {
@@ -34,9 +35,9 @@ const defaultProject: VideoProject = {
 function getStoredKeys(): Keys {
   try {
     const raw = localStorage.getItem("shorts-studio-keys");
-    if (raw) return { gemini: "", pixabay: "", unsplash: "", freesound: "", ...JSON.parse(raw) };
+    if (raw) const parsed = JSON.parse(raw); return { gemini: parsed.gemini || "", pixabay: parsed.pixabay || "", unsplash: parsed.unsplash || "" };
   } catch { /* ignore malformed browser storage */ }
-  return { gemini: "", pixabay: "", unsplash: "", freesound: "" };
+  return { gemini: "", pixabay: "", unsplash: "" };
 }
 
 function getStoredProject(): VideoProject {
@@ -74,9 +75,12 @@ function App() {
   const [voiceBlob, setVoiceBlob] = useState<Blob | null>(null);
   const [voiceUrl, setVoiceUrl] = useState("");
   const [mediaQuery, setMediaQuery] = useState("earth space science");
-  const [mediaSource, setMediaSource] = useState<"Pixabay" | "Unsplash" | "Freesound">("Pixabay");
+  const [mediaSource, setMediaSource] = useState<"Pixabay" | "Unsplash" | "Free Sound FX">("Pixabay");
   const [mediaResults, setMediaResults] = useState<MediaAsset[]>([]);
   const [selectedSound, setSelectedSound] = useState<MediaAsset | null>(null);
+  const [selectedSoundPresetId, setSelectedSoundPresetId] = useState<string | null>(null);
+  const [selectedSoundPreviewUrl, setSelectedSoundPreviewUrl] = useState("");
+  const [soundVolume, setSoundVolume] = useState(25);
   const [renderProgress, setRenderProgress] = useState(0);
   const [renderFormat, setRenderFormat] = useState<"short" | "long">("short");
   const [outputResolution, setOutputResolution] = useState<"720" | "1080">("720");
@@ -94,6 +98,10 @@ function App() {
   useEffect(() => {
     return () => { if (voiceUrl) URL.revokeObjectURL(voiceUrl); };
   }, [voiceUrl]);
+
+  useEffect(() => {
+    return () => { if (selectedSoundPreviewUrl) URL.revokeObjectURL(selectedSoundPreviewUrl); };
+  }, [selectedSoundPreviewUrl]);
 
   const updateProject = (patch: Partial<VideoProject>) => setProject(old => ({ ...old, ...patch }));
   const updateScene = (key: keyof Scene, value: string | number) => {
@@ -152,7 +160,19 @@ function App() {
       let results: MediaAsset[] = [];
       if (mediaSource === "Pixabay") results = await searchPixabay(keys.pixabay, mediaQuery);
       if (mediaSource === "Unsplash") results = await searchUnsplash(keys.unsplash, mediaQuery);
-      if (mediaSource === "Freesound") results = await searchFreesound(keys.freesound, mediaQuery);
+      if (mediaSource === "Free Sound FX") {
+        results = findSoundPresets(mediaQuery).map(preset => ({
+          id: "builtin-" + preset.id,
+          source: "Built-in",
+          kind: "audio",
+          title: preset.name,
+          url: "",
+          credit: "Generated locally by Shorts Studio AI",
+          license: "Original synthetic audio · no external sound API",
+          duration: undefined,
+          presetId: preset.id
+        }));
+      }
       setMediaResults(results);
       if (!results.length) setNotice("No results found. Try a broader English search phrase.");
     } catch (err) { reportError(err instanceof Error ? err.message : "Media search failed."); }
@@ -161,8 +181,22 @@ function App() {
 
   const applyMedia = async (asset: MediaAsset) => {
     if (asset.kind === "audio") {
-      setSelectedSound(asset);
-      setNotice("Sound selected. Check its license on Freesound before publishing; add it in your editor or use it only where your license permits.");
+      if (!asset.presetId) {
+        setError("This sound preset could not be identified. Search the built-in sound library again.");
+        return;
+      }
+      setBusy("Generating a free sound preview on this device…");
+      try {
+        const previewBlob = await createBuiltInSoundTrack(asset.presetId, 12);
+        setSelectedSound(asset);
+        setSelectedSoundPresetId(asset.presetId);
+        setSelectedSoundPreviewUrl(URL.createObjectURL(previewBlob));
+        setNotice("Sound selected. It will be generated again to match the full video length and mixed into your export.");
+      } catch (err) {
+        reportError(err instanceof Error ? err.message : "Could not generate this sound.");
+      } finally {
+        setBusy("");
+      }
       return;
     }
     const imageUrl = asset.kind === "video" ? (asset.thumbnail || asset.url) : asset.url;
@@ -254,8 +288,9 @@ function App() {
       const isShort = renderFormat === "short";
       const width = outputResolution === "1080" ? (isShort ? 1080 : 1920) : (isShort ? 720 : 1280);
       const height = outputResolution === "1080" ? (isShort ? 1920 : 1080) : (isShort ? 1280 : 720);
+      const soundBlob = selectedSoundPresetId ? await createBuiltInSoundTrack(selectedSoundPresetId, totalDuration) : null;
       const blob = await renderBrowserVideo({
-        title: project.title, scenes, voiceBlob, style,
+        title: project.title, scenes, voiceBlob, soundBlob, soundVolume: soundVolume / 100, style,
         width, height, fps: 24,
         onProgress: (value) => setRenderProgress(value)
       });
@@ -358,16 +393,16 @@ function App() {
         </section>}
 
         {page==="Media"&&<section className="panel media-panel">
-          <div className="section-heading"><div><h3>Media library</h3><p>Search visuals and sound effects. Always review source and license before publishing.</p></div><Layers3 size={22}/></div>
+          <div className="section-heading"><div><h3>Media & Free Sound Studio</h3><p>Search Pixabay/Unsplash visuals or create original sound effects and ambient music locally — no Freesound token or paid sound API needed.</p></div><Layers3 size={22}/></div>
           <div className="media-toolbar">
             <input className="text-field" value={mediaQuery} onChange={e=>setMediaQuery(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")searchMedia();}} placeholder="Search in English: Earth from space, spaceship, ocean…"/>
-            <select className="text-field media-source" value={mediaSource} onChange={e=>setMediaSource(e.target.value as any)}><option>Pixabay</option><option>Unsplash</option><option>Freesound</option></select>
+            <select className="text-field media-source" value={mediaSource} onChange={e=>setMediaSource(e.target.value as any)}><option>Pixabay</option><option>Unsplash</option><option>Free Sound FX</option></select>
             <button className="primary-btn" disabled={!!busy} onClick={searchMedia}><Search size={15}/> Search</button>
           </div>
-          <div className="notice">Current scene: <b>{selectedScene+1}. {currentScene?.title}</b>. Choose an image/video result to attach it to this scene. For Freesound, preview it and inspect its license individually.</div>
-          {selectedSound&&<div className="sound-selected"><Music2 size={17}/><div><b>{selectedSound.title}</b><small>{selectedSound.credit} · {selectedSound.license}</small><audio className="sound-preview" controls preload="none" src={selectedSound.url}/></div><a href={selectedSound.pageUrl} target="_blank" rel="noreferrer">Open source <ExternalLink size={12}/></a></div>}
-          <div className="media-grid">{mediaResults.map(asset=><div className="media-card" key={asset.id}>{asset.thumbnail?<img src={asset.thumbnail} alt={asset.title} loading="lazy"/>:<div className="media-audio-art"><AudioLines size={30}/></div>}<div className="media-card-body"><b>{asset.title}</b><small>{asset.source} · {asset.kind} · {asset.credit}</small><small className="license-text">{asset.license}</small><div className="media-card-actions"><button className="secondary-btn" onClick={()=>applyMedia(asset)}>{asset.kind==="audio"?"Select sound":"Add to scene"}</button>{asset.pageUrl&&<a href={asset.pageUrl} target="_blank" rel="noreferrer" aria-label="Open source"><ExternalLink size={15}/></a>}</div></div></div>)}</div>
-          {!mediaResults.length&&<div className="empty-state"><ImageIcon size={30}/><b>No media search yet</b><span>Choose a provider, enter a search phrase and press Search.</span></div>}
+          <div className="notice">Current scene: <b>{selectedScene+1}. {currentScene?.title}</b>. Choose an image/video to attach to this scene, or select <b>Free Sound FX</b> to add an original background track/effect that will be mixed into the final render.</div>
+          {selectedSound&&<div className="sound-selected"><Music2 size={17}/><div><b>{selectedSound.title}</b><small>{selectedSound.credit} · {selectedSound.license}</small>{selectedSoundPreviewUrl&&<audio className="sound-preview" controls preload="none" src={selectedSoundPreviewUrl}/>}<label className="sound-volume-label">Sound volume: {soundVolume}%</label><input className="sound-volume" type="range" min="0" max="60" value={soundVolume} onChange={e=>setSoundVolume(Number(e.target.value))}/></div><button className="secondary-btn" onClick={()=>{setSelectedSound(null);setSelectedSoundPresetId(null);setSelectedSoundPreviewUrl("");setNotice("Background sound removed.");}}>Remove</button></div>}
+          <div className="media-grid">{mediaResults.map(asset=><div className="media-card" key={asset.id}>{asset.thumbnail?<img src={asset.thumbnail} alt={asset.title} loading="lazy"/>:<div className="media-audio-art">{asset.kind==="audio"?<AudioLines size={30}/>:<ImageIcon size={30}/>}</div>}<div className="media-card-body"><b>{asset.title}</b><small>{asset.source} · {asset.kind} · {asset.credit}</small><small className="license-text">{asset.license}</small><div className="media-card-actions"><button className="secondary-btn" onClick={()=>applyMedia(asset)}>{asset.kind==="audio"?"Generate & select":"Add to scene"}</button>{asset.pageUrl&&<a href={asset.pageUrl} target="_blank" rel="noreferrer" aria-label="Open source"><ExternalLink size={15}/></a>}</div></div></div>)}</div>
+          {!mediaResults.length&&<div className="empty-state"><ImageIcon size={30}/><b>No media search yet</b><span>Choose Pixabay, Unsplash or Free Sound FX, then enter a search phrase and press Search. Built-in sound presets can be generated without any audio API key.</span></div>}
         </section>}
 
         {page==="Voice"&&<section className="panel">
@@ -395,8 +430,8 @@ function App() {
         </section>}
       </div>
     </main>
-    {showSettings&&<div className="modal-backdrop" onClick={()=>setShowSettings(false)}><div className="modal api-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><div><span className="eyebrow">LOCAL API SETTINGS</span><h3>Connect your services</h3></div><button className="icon-btn" onClick={()=>setShowSettings(false)}><X size={18}/></button></div><p className="muted">Keys are stored in this browser's local storage for this personal prototype. They are not committed to GitHub, but browser-side keys can be inspected by someone with access to this device or browser profile. For a public multi-user app, move them to a server-side proxy before sharing.</p>
-          {([{key:"gemini",label:"Gemini API key",hint:"Used for script generation and TTS"},{key:"pixabay",label:"Pixabay API key",hint:"Images and video search"},{key:"unsplash",label:"Unsplash Access Key",hint:"Photographic image search"},{key:"freesound",label:"Freesound API token",hint:"Sound effects search"}] as const).map(item=><div key={item.key}><label className="field-label">{item.label.toUpperCase()}</label><input className="text-field" type="password" autoComplete="off" value={keyDraft[item.key]} onChange={e=>setKeyDraft(old=>({...old,[item.key]:e.target.value}))} placeholder="Paste key here"/><div className="key-hint">{item.hint}</div></div>)}
+    {showSettings&&<div className="modal-backdrop" onClick={()=>setShowSettings(false)}><div className="modal api-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><div><span className="eyebrow">LOCAL API SETTINGS</span><h3>Connect your services</h3></div><button className="icon-btn" onClick={()=>setShowSettings(false)}><X size={18}/></button></div><p className="muted">Gemini, Pixabay and Unsplash keys are stored in this browser only and are not committed to GitHub. Free Sound FX is generated locally and does not require an API key. Browser-side API keys can still be inspected by someone with access to this browser profile.</p>
+          {([{key:"gemini",label:"Gemini API key",hint:"Used for script generation and TTS"},{key:"pixabay",label:"Pixabay API key",hint:"Images and video search"},{key:"unsplash",label:"Unsplash Access Key",hint:"Photographic image search"}] as const).map(item=><div key={item.key}><label className="field-label">{item.label.toUpperCase()}</label><input className="text-field" type="password" autoComplete="off" value={keyDraft[item.key]} onChange={e=>setKeyDraft(old=>({...old,[item.key]:e.target.value}))} placeholder="Paste key here"/><div className="key-hint">{item.hint}</div></div>)}
           <div className="modal-actions"><span className="muted"><KeyRound size={13}/> Never commit keys to GitHub</span><button className="primary-btn" onClick={saveSettings}><Check size={15}/> Save API settings</button></div>
         </div></div>}
     <footer className="mobile-bottom">{nav.slice(0,4).map(item=>{const Icon=item.icon;return <button className={page===item.name?"selected":""} key={item.name} onClick={()=>setPage(item.name)}><Icon size={19}/><small>{item.name}</small></button>})}</footer>
