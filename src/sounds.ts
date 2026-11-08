@@ -178,7 +178,7 @@ function encodeWav(buffer: AudioBuffer): Blob {
   return new Blob([output], { type: "audio/wav" });
 }
 
-export async function createFreeSoundTrack(presetId: string, durationSeconds: number): Promise<Blob> {
+export async function createBuiltInSoundTrack(presetId: string, durationSeconds: number): Promise<Blob> {
   const preset = SOUND_PRESETS.find((item) => item.id === presetId);
   if (!preset) throw new Error("Unknown built-in sound preset.");
   const duration = Math.max(2, Math.min(180, durationSeconds));
