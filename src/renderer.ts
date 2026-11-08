@@ -4,6 +4,8 @@ export type RenderOptions = {
   title: string;
   scenes: Scene[];
   voiceBlob?: Blob | null;
+  soundBlob?: Blob | null;
+  soundVolume?: number;
   style: string;
   width?: number;
   height?: number;
@@ -136,17 +138,35 @@ export async function renderBrowserVideo(options: RenderOptions): Promise<Blob> 
   const images=await Promise.all(scenes.map(s=>loadImage(s.imageUrl)));
   const videos=await Promise.all(scenes.map(s=>loadVideo(s.videoUrl)));
   const stream=canvas.captureStream(fps);
-  let audioContext:AudioContext|null=null, source:AudioBufferSourceNode|null=null;
-  if(options.voiceBlob) {
+  let audioContext:AudioContext|null=null;
+  const audioSources:AudioBufferSourceNode[]=[];
+  if(options.voiceBlob || options.soundBlob) {
     const Ctx=window.AudioContext||(window as any).webkitAudioContext;
-    if(Ctx) {
-      audioContext=new Ctx(); await audioContext.resume();
-      const buffer=await audioContext.decodeAudioData((await options.voiceBlob.arrayBuffer()).slice(0));
-      const destination=audioContext.createMediaStreamDestination();
-      source=audioContext.createBufferSource(); source.buffer=buffer;
-      source.connect(destination); source.connect(audioContext.destination);
-      destination.stream.getAudioTracks().forEach(track=>stream.addTrack(track));
+    if(!Ctx) throw new Error("Audio mixing is not supported by this browser. Try the latest Chrome or Edge.");
+    audioContext=new Ctx();
+    await audioContext.resume();
+    const destination=audioContext.createMediaStreamDestination();
+    if(options.voiceBlob) {
+      const voiceBuffer=await audioContext.decodeAudioData((await options.voiceBlob.arrayBuffer()).slice(0));
+      const voiceSource=audioContext.createBufferSource();
+      voiceSource.buffer=voiceBuffer;
+      const voiceGain=audioContext.createGain();
+      voiceGain.gain.value=1;
+      voiceSource.connect(voiceGain).connect(destination);
+      voiceGain.connect(audioContext.destination);
+      audioSources.push(voiceSource);
     }
+    if(options.soundBlob) {
+      const soundBuffer=await audioContext.decodeAudioData((await options.soundBlob.arrayBuffer()).slice(0));
+      const soundSource=audioContext.createBufferSource();
+      soundSource.buffer=soundBuffer;
+      const soundGain=audioContext.createGain();
+      soundGain.gain.value=Math.max(0,Math.min(1,options.soundVolume ?? 0.2));
+      soundSource.connect(soundGain).connect(destination);
+      soundGain.connect(audioContext.destination);
+      audioSources.push(soundSource);
+    }
+    destination.stream.getAudioTracks().forEach(track=>stream.addTrack(track));
   }
   const types=["video/mp4;codecs=avc1.42E01E,mp4a.40.2","video/mp4","video/webm;codecs=vp9,opus","video/webm;codecs=vp8,opus","video/webm"];
   const mimeType=types.find(type=>MediaRecorder.isTypeSupported(type));
@@ -159,7 +179,7 @@ export async function renderBrowserVideo(options: RenderOptions): Promise<Blob> 
     recorder.onstop=()=>resolve(new Blob(chunks,{type:mimeType}));
   });
   const total=scenes.reduce((sum,s)=>sum+Math.max(1,s.duration),0);
-  recorder.start(500); source?.start(0);
+  recorder.start(500); audioSources.forEach(source=>source.start(0));
   let elapsed=0;
   for(let i=0;i<scenes.length;i++){
     const scene=scenes[i], duration=Math.max(1,scene.duration), started=performance.now();
@@ -174,7 +194,7 @@ export async function renderBrowserVideo(options: RenderOptions): Promise<Blob> 
     clip?.pause();
     elapsed+=duration;
   }
-  recorder.stop(); stream.getTracks().forEach(track=>track.stop()); source?.stop(); await audioContext?.close();
+  recorder.stop(); stream.getTracks().forEach(track=>track.stop()); audioSources.forEach(source=>{ try { source.stop(); } catch { /* already stopped */ } }); await audioContext?.close();
   options.onProgress?.(100);
   return finished;
 }
