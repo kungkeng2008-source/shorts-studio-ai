@@ -8,10 +8,10 @@ Responsive PWA prototype for an animated science / What If video production work
 - Gemini Interactions API for script + storyboard generation.
 - Gemini TTS voice generation using the TTS model configured in the service.
 - Pixabay image/video search, Unsplash photo search and Freesound sound search.
-- Per-scene visual directions, narration, overlay text, duration and image credit/source.
-- Browser-side Canvas + MediaRecorder render. The browser decides whether MP4 or WebM is available.
+- Per-scene visual directions, narration, overlay text, duration, still-image credits and source video clips.
+- Browser-side Canvas + MediaRecorder render with still-image motion and source video footage where CORS/browser support permits. The browser decides whether MP4 or WebM is available.
 - Thumbnail PNG generation.
-- Downloadable project JSON and YouTube title/description/hashtags/pinned-comment metadata.
+- Downloadable project JSON, SRT subtitles and YouTube title/description/hashtags/pinned-comment metadata.
 - Local browser project save, PWA manifest, icon and basic app-shell service-worker cache.
 
 ## API setup
@@ -32,7 +32,7 @@ Keys are stored in localStorage in the current browser profile. They are **not c
 - Unsplash API results must remain hotlinked to Unsplash URLs and display photographer attribution. The app triggers the documented download tracking endpoint when an image is attached.
 - The current browser renderer makes a motion-graphic video from scene cards, scene images, overlay text, narration and audio. It is not a complete nonlinear editor or full 3D renderer. The output container/codec depends on device browser support.
 - Browser-side rendering uses device memory, CPU/GPU and battery. Render shorter/lower-resolution videos on mobile if needed.
-- Background music from Freesound can be previewed/selected, but the initial video renderer currently mixes the generated narration track only. Add licensed music/SFX in a later editor pass.
+- Freesound results can be previewed in the app and their license/source opened. The current video renderer mixes generated narration; selected Freesound effects are not yet mixed into the final video.
 - PWA offline support caches the app shell, not media search results or generated video files.
 
 ## Run locally
