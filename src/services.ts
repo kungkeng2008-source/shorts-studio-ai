@@ -5,6 +5,7 @@ export type Scene = {
   overlayText: string;
   duration: number;
   imageUrl?: string;
+  videoUrl?: string;
   imageCredit?: string;
   imageSourceUrl?: string;
 };
