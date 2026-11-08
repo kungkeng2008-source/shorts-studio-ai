@@ -164,7 +164,7 @@ function App() {
       if (mediaSource === "Pixabay") results = await searchPixabay(keys.pixabay, mediaQuery);
       if (mediaSource === "Unsplash") results = await searchUnsplash(keys.unsplash, mediaQuery);
       if (mediaSource === "Free Sound FX") {
-        results = findSoundPresets(mediaQuery).map(preset => ({
+        results = findSoundPresets(mediaQuery).map((preset): MediaAsset => ({
           id: "builtin-" + preset.id,
           source: "Built-in",
           kind: "audio",
