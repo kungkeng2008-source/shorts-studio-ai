@@ -36,6 +36,30 @@ async function loadImage(url?: string): Promise<HTMLImageElement | null> {
   });
 }
 
+async function loadVideo(url?: string): Promise<HTMLVideoElement | null> {
+  if (!url) return null;
+  return new Promise((resolve) => {
+    const video = document.createElement("video");
+    let settled = false;
+    const finish = (value: HTMLVideoElement | null) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeout);
+      resolve(value);
+    };
+    const timeout = window.setTimeout(() => finish(null), 12000);
+    video.crossOrigin = "anonymous";
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.preload = "auto";
+    video.onloadeddata = () => finish(video);
+    video.onerror = () => finish(null);
+    video.src = url;
+    video.load();
+  });
+}
+
 function drawWrapped(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, max: number, size: number, color: string, maxLines = 3) {
   ctx.font = "700 " + size + "px Arial";
   ctx.textAlign = "center";
@@ -49,17 +73,20 @@ function drawWrapped(ctx: CanvasRenderingContext2D, text: string, x: number, y: 
   ctx.shadowBlur = 0;
 }
 
-function drawScene(ctx: CanvasRenderingContext2D, w: number, h: number, scene: Scene, index: number, count: number, style: string, elapsed: number, progress: number, img: HTMLImageElement | null) {
+function drawScene(ctx: CanvasRenderingContext2D, w: number, h: number, scene: Scene, index: number, count: number, style: string, elapsed: number, progress: number, img: HTMLImageElement | null, video: HTMLVideoElement | null = null) {
   const gradient = ctx.createLinearGradient(0, 0, w * .8, h);
   gradient.addColorStop(0, style.includes("Blueprint") ? "#092342" : "#101a34");
   gradient.addColorStop(.5, style.includes("Cartoon") ? "#668daf" : "#29436f");
   gradient.addColorStop(1, "#080d18");
   ctx.fillStyle = gradient; ctx.fillRect(0, 0, w, h);
-  if (img) {
-    const scale = Math.max(w / img.width, h / img.height);
-    const dw = img.width * scale, dh = img.height * scale;
-    ctx.save(); ctx.globalAlpha = .42;
-    ctx.drawImage(img, (w - dw) / 2 + Math.sin(elapsed * .3) * 12, (h - dh) / 2, dw, dh);
+  const media: CanvasImageSource | null = video && video.readyState >= 2 ? video : img;
+  const mediaWidth = video && video.readyState >= 2 ? video.videoWidth : img?.width;
+  const mediaHeight = video && video.readyState >= 2 ? video.videoHeight : img?.height;
+  if (media && mediaWidth && mediaHeight) {
+    const scale = Math.max(w / mediaWidth, h / mediaHeight);
+    const dw = mediaWidth * scale, dh = mediaHeight * scale;
+    ctx.save(); ctx.globalAlpha = .48;
+    ctx.drawImage(media, (w - dw) / 2 + Math.sin(elapsed * .3) * 12, (h - dh) / 2, dw, dh);
     ctx.restore();
     const shade = ctx.createLinearGradient(0, 0, 0, h);
     shade.addColorStop(0, "rgba(3,8,19,.12)"); shade.addColorStop(.55, "rgba(3,8,19,.22)"); shade.addColorStop(1, "rgba(3,8,19,.88)");
@@ -107,6 +134,7 @@ export async function renderBrowserVideo(options: RenderOptions): Promise<Blob> 
   const canvas=document.createElement("canvas"); canvas.width=w; canvas.height=h;
   const ctx=canvas.getContext("2d",{alpha:false}); if(!ctx) throw new Error("Canvas is unavailable.");
   const images=await Promise.all(scenes.map(s=>loadImage(s.imageUrl)));
+  const videos=await Promise.all(scenes.map(s=>loadVideo(s.videoUrl)));
   const stream=canvas.captureStream(fps);
   let audioContext:AudioContext|null=null, source:AudioBufferSourceNode|null=null;
   if(options.voiceBlob) {
@@ -135,12 +163,15 @@ export async function renderBrowserVideo(options: RenderOptions): Promise<Blob> 
   let elapsed=0;
   for(let i=0;i<scenes.length;i++){
     const scene=scenes[i], duration=Math.max(1,scene.duration), started=performance.now();
+    const clip=videos[i];
+    if (clip) { try { await clip.play(); } catch { /* use the still image fallback if autoplay is blocked */ } }
     while((performance.now()-started)/1000<duration){
       const t=(performance.now()-started)/1000;
-      drawScene(ctx,w,h,scene,i,scenes.length,options.style,t,Math.min(1,(elapsed+t)/total),images[i]);
+      drawScene(ctx,w,h,scene,i,scenes.length,options.style,t,Math.min(1,(elapsed+t)/total),images[i],clip);
       options.onProgress?.(Math.round(Math.min(1,(elapsed+t)/total)*100));
       await frame();
     }
+    clip?.pause();
     elapsed+=duration;
   }
   recorder.stop(); stream.getTracks().forEach(track=>track.stop()); source?.stop(); await audioContext?.close();
