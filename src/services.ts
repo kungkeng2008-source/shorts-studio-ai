@@ -21,7 +21,7 @@ export type VideoProject = {
 
 export type MediaAsset = {
   id: string;
-  source: "Pixabay" | "Unsplash" | "Freesound";
+  source: "Pixabay" | "Unsplash" | "Built-in";
   kind: "image" | "video" | "audio";
   title: string;
   thumbnail?: string;
@@ -31,6 +31,7 @@ export type MediaAsset = {
   license?: string;
   downloadLocation?: string;
   duration?: number;
+  presetId?: string;
 };
 
 async function readError(response: Response): Promise<string> {
@@ -249,24 +250,6 @@ export async function searchUnsplash(apiKey: string, query: string): Promise<Med
 export async function trackUnsplashDownload(apiKey: string, location?: string): Promise<void> {
   if (!apiKey.trim() || !location) return;
   await fetch(location, { headers: { Authorization: "Client-ID " + apiKey.trim(), "Accept-Version": "v1" } });
-}
-
-export async function searchFreesound(apiKey: string, query: string): Promise<MediaAsset[]> {
-  if (!apiKey.trim()) throw new Error("Add your Freesound API token in API Settings.");
-  const params = new URLSearchParams({
-    query, page_size: "12", sort: "score",
-    fields: "id,name,username,license,duration,url,previews,description,tags"
-  });
-  const response = await fetch("https://freesound.org/apiv2/search/?" + params + "&token=" + encodeURIComponent(apiKey.trim()));
-  if (!response.ok) throw new Error("Freesound (" + response.status + "): " + await readError(response));
-  const data = await response.json();
-  return (data.results || []).map((sound: any) => ({
-    id: "freesound-" + sound.id, source: "Freesound", kind: "audio",
-    title: sound.name || "Sound effect",
-    url: sound.previews?.["preview-hq-mp3"] || sound.previews?.["preview-lq-mp3"] || sound.url,
-    pageUrl: sound.url, credit: "Freesound / " + (sound.username || "Creator"),
-    license: sound.license || "Check individual Freesound license", duration: sound.duration
-  }));
 }
 
 export function saveBlob(blob: Blob, filename: string): void {
