@@ -110,3 +110,9 @@
 
 .sound-preview{display:block;width:min(100%,260px);height:30px;margin-top:7px}
 .scene-image{object-fit:cover}
+
+
+/* Built-in Free Sound Studio controls */
+.sound-volume-label{display:block;color:#98a9c4;font-size:9px;margin:8px 0 4px}
+.sound-volume{display:block;width:min(100%,280px);accent-color:#91adf0}
+.sound-selected .secondary-btn{white-space:nowrap;align-self:center}
