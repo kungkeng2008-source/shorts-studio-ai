@@ -396,6 +396,18 @@ export async function searchUnsplash(apiKey: string, query: string): Promise<Med
   return results;
 }
 
+
+export async function trackUnsplashDownload(apiKey: string, location?: string): Promise<void> {
+  if (!apiKey.trim() || !location) return;
+  try {
+    const separator = location.includes("?") ? "&" : "?";
+    const url = location + separator + new URLSearchParams({ client_id: apiKey.trim() }).toString();
+    await fetch(url, { method: "GET", mode: "cors" });
+  } catch {
+    // Tracking is best-effort; do not block attaching the selected photo.
+  }
+}
+
 export function saveBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
