@@ -76,7 +76,6 @@ async function createInteraction(apiKey: string, body: Record<string, unknown>):
       headers: {
         "Content-Type": "application/json",
         "x-goog-api-key": cleanKey,
-        "Api-Revision": "2026-05-20"
       },
       body: JSON.stringify(body)
     });
