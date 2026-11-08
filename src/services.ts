@@ -156,7 +156,7 @@ export function generateLocalProject(topic: string, style: string, language: str
     : titleFromTopic(cleanTopic);
   const hook = scenes[0]?.narration || cleanTopic;
   const slugWords = cleanTopic.toLowerCase().match(/[a-z0-9]+/g) || ["whatif", "science"];
-  const hashtags = Array.from(new Set(["#WhatIf", "#Science", ...slugWords.slice(0, 3).map(word => "#" + word]));
+  const hashtags = Array.from(new Set(["#WhatIf", "#Science", ...slugWords.slice(0, 3).map(word => "#" + word)]));
   return {
     title,
     hook,
