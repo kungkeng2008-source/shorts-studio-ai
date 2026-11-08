@@ -116,25 +116,80 @@ export function extractJson<T>(raw: string): T {
   return JSON.parse(cleaned.slice(start, end + 1)) as T;
 }
 
+function topicTerms(topic: string): string[] {
+  const stopWords = new Set([
+    "why","what","when","where","who","how","does","do","did","is","are","was","were",
+    "the","a","an","and","or","but","for","to","of","in","on","at","by","with","from",
+    "have","has","had","can","could","would","should","will","if","than","then","this",
+    "that","these","those","it","its","your","you","we","they","their","our","about",
+    "tại","sao","vì","như","thế","nào","là","có","của","và","hay","hoặc","khi","nếu",
+    "một","những","các","được","bị","thì","ra","sẽ","đã","đang","gì","ai","đâu"
+  ]);
+  return Array.from(new Set(topic
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .match(/[a-z0-9]+/g) || []
+  )).filter(word => word.length > 1 && !stopWords.has(word));
+}
+
+function projectMatchesTopic(project: VideoProject, topic: string): boolean {
+  const terms = topicTerms(topic);
+  if (!terms.length) return true;
+  const content = [
+    project.title, project.hook, project.description,
+    ...(project.scenes || []).flatMap(scene => [
+      scene.title, scene.narration, scene.visual, scene.overlayText
+    ])
+  ].join(" ").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const matches = terms.filter(term => content.includes(term)).length;
+  const required = terms.length <= 2 ? 1 : 2;
+  return matches >= required;
+}
+
 export async function generateProject(apiKey: string, topic: string, style: string, language: string, duration: number): Promise<VideoProject> {
-  const prompt =
+  const corePrompt =
     "You are a YouTube Shorts science storyteller, visual director and fact-checking editor.\n" +
-    "Create one original, high-retention " + duration + "-second vertical video about: " + JSON.stringify(topic) + ".\n" +
+    "LOCKED VIDEO TOPIC (must not be changed): " + JSON.stringify(topic) + ".\n" +
+    "Every title, hook, scene, narration and visual direction MUST explain this exact topic. Do not substitute a different What If scenario or reuse a previous project. Do not change the subject to Earth, space, planets or another topic unless that is explicitly the requested topic.\n" +
+    "Create one original, high-retention " + duration + "-second vertical video about the locked topic above.\n" +
     "Audience: international viewers. Output language: " + language + ". Visual style: " + style + ".\n" +
     "Priorities: a precise curiosity gap in the first 1-2 seconds; fast but understandable progression; one satisfying payoff; a reveal or meaningful visual change every few seconds. Avoid false claims, fake statistics, invented sources, filler and generic engagement bait.\n" +
     "For hypothetical scenarios, clearly distinguish assumptions from established science. For factual claims, use cautious wording if the premise is uncertain. Do not invent citations or dates.\n" +
     "Return ONLY valid JSON with this structure: { title, hook, description, hashtags, pinnedComment, scenes }.\n" +
-    "scenes must be an array of 5-7 items. Each item must have title, narration, visual, overlayText, duration. Total duration should be close to " + duration + " seconds. Narration must fit natural speech. Add a question or visual surprise early, escalate the stakes, then deliver the payoff.";
-  const raw = await geminiText(apiKey, prompt);
-  const project = extractJson<VideoProject>(raw);
-  if (!Array.isArray(project.scenes) || project.scenes.length < 2) throw new Error("The generated storyboard does not contain enough scenes. Generate again.");
-  project.scenes = project.scenes.map((scene, index) => ({
-    title: scene.title || "Scene " + (index + 1),
-    narration: scene.narration || "",
-    visual: scene.visual || "",
-    overlayText: scene.overlayText || "",
-    duration: Math.max(2, Number(scene.duration) || 5)
-  }));
+    "scenes must be an array of 5-7 items. Each item must have title, narration, visual, overlayText, duration. Total duration should be close to " + duration + " seconds. Narration must fit natural speech. Add a question or visual surprise early, escalate the stakes, then deliver the payoff.\n" +
+    "Before returning, verify that every scene is about the LOCKED VIDEO TOPIC and that the title clearly names the requested subject.";
+  const parseAndNormalize = (rawText: string): VideoProject => {
+    const result = extractJson<VideoProject>(rawText);
+    if (!Array.isArray(result.scenes) || result.scenes.length < 2) {
+      throw new Error("The generated storyboard does not contain enough scenes. Generate again.");
+    }
+    result.scenes = result.scenes.map((scene, index) => ({
+      title: scene.title || "Scene " + (index + 1),
+      narration: scene.narration || "",
+      visual: scene.visual || "",
+      overlayText: scene.overlayText || "",
+      duration: Math.max(2, Number(scene.duration) || 5)
+    }));
+    return result;
+  };
+
+  let project = parseAndNormalize(await geminiText(apiKey, corePrompt));
+
+  // If Gemini ignores the requested subject, automatically retry once instead
+  // of silently accepting a storyboard for the wrong video topic.
+  if (!projectMatchesTopic(project, topic)) {
+    const correction =
+      corePrompt +
+      "\n\nCORRECTION: Your previous response was about the wrong subject. The user's requested topic is exactly " +
+      JSON.stringify(topic) +
+      ". Discard the previous answer and write a completely new storyboard only about this exact topic. Do not reuse unrelated scenes.";
+    project = parseAndNormalize(await geminiText(apiKey, correction));
+    if (!projectMatchesTopic(project, topic)) {
+      throw new Error("Gemini returned a storyboard that does not match your topic. No wrong-topic project was saved. Please generate again.");
+    }
+  }
+
   return project;
 }
 
