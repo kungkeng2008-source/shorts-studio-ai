@@ -1,25 +1,39 @@
 # Shorts Studio AI
 
-Responsive PWA starter for an animated science / What If video production workspace.
+Responsive PWA prototype for an animated science / What If video production workflow.
 
-## Prototype features in this first commit
+## Working in the current MVP
 
 - Responsive desktop and mobile layout.
-- Topic discovery starter cards.
-- Scene-by-scene storyboard editor.
-- Six visual style presets: Isometric 3D, Cartoon Explainer, Blueprint, Hologram HUD, 3D Data Chart, and Paper Cutout.
-- Editable narration, visual direction, and scene duration.
-- Download a structured project JSON.
-- PWA manifest, SVG app icon, and basic offline shell caching.
-- GitHub Pages deployment workflow.
+- Gemini Interactions API for script + storyboard generation.
+- Gemini TTS voice generation using the TTS model configured in the service.
+- Pixabay image/video search, Unsplash photo search and Freesound sound search.
+- Per-scene visual directions, narration, overlay text, duration and image credit/source.
+- Browser-side Canvas + MediaRecorder render. The browser decides whether MP4 or WebM is available.
+- Thumbnail PNG generation.
+- Downloadable project JSON and YouTube title/description/hashtags/pinned-comment metadata.
+- Local browser project save, PWA manifest, icon and basic app-shell service-worker cache.
 
-## Not implemented yet
+## API setup
 
-This first version is a usable **front-end prototype**, not a full AI video generator. It does not yet call Gemini, Pixabay, Unsplash, or Freesound; it does not synthesize speech or render MP4. Those integrations will be added in subsequent commits and tested before being marked as ready.
+Open **API & Settings** in the app and enter your own:
+- Gemini API key
+- Pixabay API key
+- Unsplash Access Key
+- Freesound API token
 
-## Security
+Keys are stored in localStorage in the current browser profile. They are **not committed to this repository**, but browser-side keys can be inspected by someone who has access to that browser profile or developer tools. This is a personal-use MVP. Before making a multi-user public service, proxy provider calls through a server-side Worker and store keys as server secrets.
 
-Do not paste production API keys into the public repository or browser local storage. Provider keys must be stored as server-side secrets in a backend such as Cloudflare Workers. The frontend must call that backend, never expose provider secrets in JavaScript bundles.
+## Important limitations
+
+- Generated scientific scripts are drafts. Fact-check scientific claims, numbers and assumptions before publishing.
+- Media providers have different terms. Keep attribution and inspect the individual license of every Freesound result before using it commercially.
+- Pixabay API results must be shown with provider attribution; API searches are rate-limited and cached according to Pixabay's terms.
+- Unsplash API results must remain hotlinked to Unsplash URLs and display photographer attribution. The app triggers the documented download tracking endpoint when an image is attached.
+- The current browser renderer makes a motion-graphic video from scene cards, scene images, overlay text, narration and audio. It is not a complete nonlinear editor or full 3D renderer. The output container/codec depends on device browser support.
+- Browser-side rendering uses device memory, CPU/GPU and battery. Render shorter/lower-resolution videos on mobile if needed.
+- Background music from Freesound can be previewed/selected, but the initial video renderer currently mixes the generated narration track only. Add licensed music/SFX in a later editor pass.
+- PWA offline support caches the app shell, not media search results or generated video files.
 
 ## Run locally
 
@@ -34,16 +48,14 @@ npm run dev
 npm run build
 ```
 
-## GitHub Pages
+## Publish with GitHub Pages
 
-1. In the repository, open **Settings → Pages**.
-2. Under **Build and deployment**, choose **GitHub Actions** as the source.
-3. The workflow in `.github/workflows/deploy-pages.yml` builds and deploys the app on pushes to `main`.
-4. After the first successful deployment, the app URL is:
-   `https://kungkeng2008-source.github.io/shorts-studio-ai/`
+The GitHub Actions workflow builds the app and deploys the Pages artifact. One repository-level setting must be enabled once:
 
-The app uses relative asset URLs so the same build can also be deployed to another static host.
+1. Open [Repository Settings → Pages](https://github.com/kungkeng2008-source/shorts-studio-ai/settings/pages).
+2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
+3. Return to **Actions** and rerun the latest **Build and Deploy Shorts Studio AI** workflow (or push a new commit).
+4. After the workflow succeeds, open:
+   https://kungkeng2008-source.github.io/shorts-studio-ai/
 
-## PWA
-
-Serve over HTTPS, then use the browser's Install App / Add to Home Screen option. Offline caching is a basic app-shell cache; generated media and project files remain on the user's device.
+On a phone, open the published HTTPS URL in Safari/Chrome and choose **Add to Home Screen** / **Install app**. On desktop, use the browser's Install App option when available.
