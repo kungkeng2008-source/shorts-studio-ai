@@ -43,17 +43,47 @@ async function readError(response: Response): Promise<string> {
   }
 }
 
+function normalizeApiKey(value: string, provider: string): string {
+  // Copy/paste from a password manager or notes app can add spaces, zero-width
+  // characters or surrounding quotation marks. Strip those harmless wrappers,
+  // but never log or silently rewrite a key containing other Unicode symbols.
+  const normalized = value
+    .replace(/[\\u200B-\\u200D\\uFEFF]/g, "")
+    .trim()
+    .replace(/^[\"'“”‘’]+|[\"'“”‘’]+$/g, "")
+    .replace(/[\\r\\n\\t ]+/g, "");
+
+  if (!normalized) {
+    throw new Error("Add your " + provider + " API key in API & Settings.");
+  }
+  if (/[^\\x21-\\x7E]/.test(normalized)) {
+    throw new Error(
+      provider + " API key contains a non-standard character. Re-copy only the key itself (plain English letters/numbers/symbols), without labels, quotation marks or extra text, then save it again."
+    );
+  }
+  return normalized;
+}
+
 async function createInteraction(apiKey: string, body: Record<string, unknown>): Promise<any> {
-  if (!apiKey.trim()) throw new Error("Add your Gemini API key in API Settings first.");
-  const response = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey.trim(),
-      "Api-Revision": "2026-05-20"
-    },
-    body: JSON.stringify(body)
-  });
+  const cleanKey = normalizeApiKey(apiKey, "Gemini");
+  let response: Response;
+  try {
+    response = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": cleanKey,
+        "Api-Revision": "2026-05-20"
+      },
+      body: JSON.stringify(body)
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/headers|RequestInit|ISO-8859-1|ByteString/i.test(message)) {
+      throw new Error("The Gemini API key contains unsupported characters. Open API & Settings, clear the Gemini field, paste the plain API key again, and save.");
+    }
+    throw new Error("Could not contact Gemini. Check your internet connection and try again. " + message);
+  }
   if (!response.ok) throw new Error("Gemini API (" + response.status + "): " + await readError(response));
   return response.json();
 }
