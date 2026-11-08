@@ -166,10 +166,11 @@ function App() {
       return;
     }
     const imageUrl = asset.kind === "video" ? (asset.thumbnail || asset.url) : asset.url;
+    const videoUrl = asset.kind === "video" ? asset.url : undefined;
     setProject(old => ({
       ...old,
       scenes: old.scenes.map((scene, index) => index === selectedScene ? {
-        ...scene, imageUrl, imageCredit: asset.credit || asset.source, imageSourceUrl: asset.pageUrl || asset.url
+        ...scene, imageUrl, videoUrl, imageCredit: asset.credit || asset.source, imageSourceUrl: asset.pageUrl || asset.url
       } : scene)
     }));
     if (asset.source === "Unsplash") {
@@ -209,6 +210,30 @@ function App() {
     ].join("\n");
     saveBlob(new Blob([text], { type: "text/plain;charset=utf-8" }), slugify(project.title) + "-youtube-metadata.txt");
     setLastExport("YouTube metadata downloaded");
+  };
+
+  const downloadSubtitles = () => {
+    let cursor = 0;
+    let index = 1;
+    const blocks: string[] = [];
+    const stamp = (seconds: number) => {
+      const milliseconds = Math.round(seconds * 1000);
+      const hours = Math.floor(milliseconds / 3600000);
+      const minutes = Math.floor((milliseconds % 3600000) / 60000);
+      const secs = Math.floor((milliseconds % 60000) / 1000);
+      const ms = milliseconds % 1000;
+      return [hours, minutes, secs].map(value => String(value).padStart(2, "0")).join(":") + "," + String(ms).padStart(3, "0");
+    };
+    scenes.forEach(scene => {
+      const duration = Math.max(1, Number(scene.duration) || 1);
+      if (scene.narration.trim()) {
+        blocks.push(index + "\\n" + stamp(cursor) + " --> " + stamp(cursor + duration) + "\\n" + scene.narration.trim());
+        index++;
+      }
+      cursor += duration;
+    });
+    saveBlob(new Blob([blocks.join("\\n\\n")], { type: "text/plain;charset=utf-8" }), slugify(project.title) + ".srt");
+    setLastExport("SRT subtitles downloaded");
   };
 
   const makeThumbnail = async () => {
@@ -318,7 +343,7 @@ function App() {
             <div className="form-actions"><button className="secondary-btn" onClick={()=>{localStorage.setItem("shorts-studio-project",JSON.stringify(project));setNotice("Project saved in this browser.");}}><Save size={14}/> Save project</button><button className="secondary-btn" onClick={saveProjectFile}><Download size={14}/> Download JSON</button></div>
           </div>
           <div className="panel scene-detail">
-            <div className="preview-frame"><div className="preview-sky"/>{currentScene?.imageUrl?<img className="scene-image" src={currentScene.imageUrl} alt="Selected scene" />:<div className="preview-earth"/>}<div className="preview-horizon"/><div className="preview-caption">{currentScene?.overlayText||currentScene?.title}</div><span className="preview-tag">SCENE {selectedScene+1}</span><button className="play-float" onClick={()=>setPage("Export")}><Play size={19} fill="currentColor"/></button></div>
+            <div className="preview-frame"><div className="preview-sky"/>{currentScene?.videoUrl?<video className="scene-image" src={currentScene.videoUrl} poster={currentScene.imageUrl} autoPlay loop muted playsInline />:currentScene?.imageUrl?<img className="scene-image" src={currentScene.imageUrl} alt="Selected scene" />:<div className="preview-earth"/>}<div className="preview-horizon"/><div className="preview-caption">{currentScene?.overlayText||currentScene?.title}</div><span className="preview-tag">SCENE {selectedScene+1}</span><button className="play-float" onClick={()=>setPage("Export")}><Play size={19} fill="currentColor"/></button></div>
             <div className="scene-edit">
               <div className="detail-title"><b>Scene {selectedScene+1} details</b><span>{currentScene?.duration}s</span></div>
               <label className="field-label">SCENE TITLE</label><input className="text-field" value={currentScene?.title||""} onChange={e=>updateScene("title",e.target.value)}/>
@@ -340,7 +365,7 @@ function App() {
             <button className="primary-btn" disabled={!!busy} onClick={searchMedia}><Search size={15}/> Search</button>
           </div>
           <div className="notice">Current scene: <b>{selectedScene+1}. {currentScene?.title}</b>. Choose an image/video result to attach it to this scene. For Freesound, preview it and inspect its license individually.</div>
-          {selectedSound&&<div className="sound-selected"><Music2 size={17}/><div><b>{selectedSound.title}</b><small>{selectedSound.credit} · {selectedSound.license}</small></div><a href={selectedSound.pageUrl} target="_blank" rel="noreferrer">Open source <ExternalLink size={12}/></a></div>}
+          {selectedSound&&<div className="sound-selected"><Music2 size={17}/><div><b>{selectedSound.title}</b><small>{selectedSound.credit} · {selectedSound.license}</small><audio className="sound-preview" controls preload="none" src={selectedSound.url}/></div><a href={selectedSound.pageUrl} target="_blank" rel="noreferrer">Open source <ExternalLink size={12}/></a></div>}
           <div className="media-grid">{mediaResults.map(asset=><div className="media-card" key={asset.id}>{asset.thumbnail?<img src={asset.thumbnail} alt={asset.title} loading="lazy"/>:<div className="media-audio-art"><AudioLines size={30}/></div>}<div className="media-card-body"><b>{asset.title}</b><small>{asset.source} · {asset.kind} · {asset.credit}</small><small className="license-text">{asset.license}</small><div className="media-card-actions"><button className="secondary-btn" onClick={()=>applyMedia(asset)}>{asset.kind==="audio"?"Select sound":"Add to scene"}</button>{asset.pageUrl&&<a href={asset.pageUrl} target="_blank" rel="noreferrer" aria-label="Open source"><ExternalLink size={15}/></a>}</div></div></div>)}</div>
           {!mediaResults.length&&<div className="empty-state"><ImageIcon size={30}/><b>No media search yet</b><span>Choose a provider, enter a search phrase and press Search.</span></div>}
         </section>}
@@ -366,7 +391,7 @@ function App() {
           </div></div>
           <div className="section-heading"><div><h3>YouTube publishing pack</h3><p>Review the copy, then download all metadata as a text file.</p></div></div>
           <div className="metadata-card"><div><label className="field-label">TITLE</label><p>{project.title}</p><button className="text-btn" onClick={()=>copy(project.title)}><Copy size={13}/> Copy title</button></div><div><label className="field-label">DESCRIPTION</label><p>{project.description}</p><button className="text-btn" onClick={()=>copy(project.description)}><Copy size={13}/> Copy description</button></div><div><label className="field-label">HASHTAGS</label><p>{project.hashtags.join(" ")}</p><button className="text-btn" onClick={()=>copy(project.hashtags.join(" "))}><Copy size={13}/> Copy hashtags</button></div><div><label className="field-label">PINNED COMMENT</label><p>{project.pinnedComment}</p><button className="text-btn" onClick={()=>copy(project.pinnedComment)}><Copy size={13}/> Copy comment</button></div></div>
-          <div className="form-actions"><button className="secondary-btn" onClick={downloadMetadata}><FileText size={15}/> Download title + description + tags</button><button className="secondary-btn" onClick={saveProjectFile}><Download size={15}/> Download project JSON</button></div>
+          <div className="form-actions"><button className="secondary-btn" onClick={downloadMetadata}><FileText size={15}/> Download title + description + tags</button><button className="secondary-btn" onClick={downloadSubtitles}><FileText size={15}/> Download subtitles SRT</button><button className="secondary-btn" onClick={saveProjectFile}><Download size={15}/> Download project JSON</button></div>
         </section>}
       </div>
     </main>
