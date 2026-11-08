@@ -1,4 +1,4 @@
-name: Deploy Shorts Studio AI to GitHub Pages
+name: Build and Deploy Shorts Studio AI
 
 on:
   push:
@@ -20,17 +20,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Install dependencies
         run: npm install
-      - name: Build
+      - name: Type-check and build app
         run: npm run build
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -38,11 +34,11 @@ jobs:
           path: dist
 
   deploy:
+    runs-on: ubuntu-latest
+    needs: build
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
