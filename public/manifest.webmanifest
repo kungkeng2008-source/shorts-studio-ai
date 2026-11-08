@@ -1,0 +1,11 @@
+{
+  "name": "Shorts Studio AI",
+  "short_name": "Shorts Studio",
+  "description": "Animated science and What If video studio",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#090d18",
+  "theme_color": "#090d18",
+  "orientation": "portrait-primary",
+  "icons": []
+}
