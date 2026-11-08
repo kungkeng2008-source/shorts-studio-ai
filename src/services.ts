@@ -45,21 +45,23 @@ async function readError(response: Response): Promise<string> {
 }
 
 function normalizeApiKey(value: string, provider: string): string {
-  // Copy/paste from a password manager or notes app can add spaces, zero-width
-  // characters or surrounding quotation marks. Strip those harmless wrappers,
-  // but never log or silently rewrite a key containing other Unicode symbols.
+  // Remove harmless copy/paste artifacts: Unicode whitespace, zero-width
+  // formatting marks, a BOM, and quotation marks around the key.
   const normalized = value
-    .replace(/[\\u200B-\\u200D\\uFEFF]/g, "")
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, "")
     .trim()
-    .replace(/^[\"'“”‘’]+|[\"'“”‘’]+$/g, "")
-    .replace(/[\\r\\n\\t ]+/g, "");
+    .replace(/^["'“”‘’]+|["'“”‘’]+$/g, "")
+    .replace(/[\s\u00A0]+/g, "");
 
   if (!normalized) {
     throw new Error("Add your " + provider + " API key in API & Settings.");
   }
-  if (/[^\\x21-\\x7E]/.test(normalized)) {
+  // Google API keys are ASCII strings. This check runs after harmless
+  // invisible Unicode formatting and whitespace characters are removed.
+  if (/[^\x21-\x7E]/.test(normalized)) {
     throw new Error(
-      provider + " API key contains a non-standard character. Re-copy only the key itself (plain English letters/numbers/symbols), without labels, quotation marks or extra text, then save it again."
+      provider + " API key still contains a non-standard character. Clear the field and paste only the raw API key, without labels or extra text."
     );
   }
   return normalized;
