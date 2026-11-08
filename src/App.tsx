@@ -62,7 +62,7 @@ function App() {
   const [page, setPage] = useState<Page>("Studio");
   const [mobileMenu, setMobileMenu] = useState(false);
   const [project, setProject] = useState<VideoProject>(getStoredProject);
-  const [topic, setTopic] = useState("Why Do Airplane Windows Have a Tiny Hole?");
+  const [topic, setTopic] = useState("What if Earth suddenly stopped spinning for five seconds?");
   const [style, setStyle] = useState<Style>("Isometric 3D");
   const [language, setLanguage] = useState("English");
   const [targetDuration, setTargetDuration] = useState(45);
