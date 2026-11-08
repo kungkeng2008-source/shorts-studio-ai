@@ -106,3 +106,7 @@
   .media-card>img,.media-audio-art{height:150px}
   .export-preview{grid-template-columns:1fr}
 }
+
+
+.sound-preview{display:block;width:min(100%,260px);height:30px;margin-top:7px}
+.scene-image{object-fit:cover}
