@@ -35,7 +35,10 @@ const defaultProject: VideoProject = {
 function getStoredKeys(): Keys {
   try {
     const raw = localStorage.getItem("shorts-studio-keys");
-    if (raw) const parsed = JSON.parse(raw); return { gemini: parsed.gemini || "", pixabay: parsed.pixabay || "", unsplash: parsed.unsplash || "" };
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return { gemini: parsed.gemini || "", pixabay: parsed.pixabay || "", unsplash: parsed.unsplash || "" };
+    }
   } catch { /* ignore malformed browser storage */ }
   return { gemini: "", pixabay: "", unsplash: "" };
 }
@@ -341,7 +344,7 @@ function App() {
           <div className="section-heading"><div><h3>Your current project</h3><p>{project.title}</p></div><span className="muted-label">AUTO-SAVED IN THIS BROWSER</span></div>
           <div className="topic-grid">
             <button className="topic-card" onClick={()=>setPage("Storyboard")}><div className="topic-art art-0"><span>STORYBOARD</span><b>✦</b></div><div className="topic-body"><h4>Edit your scenes</h4><p>Update voiceover, visual direction and timing.</p><small>{scenes.length} scenes · {totalDuration}s</small></div></button>
-            <button className="topic-card" onClick={()=>setPage("Media")}><div className="topic-art art-1"><span>MEDIA LIBRARY</span><b>◉</b></div><div className="topic-body"><h4>Find footage and sound</h4><p>Search Pixabay, Unsplash and Freesound.</p><small>Choose media for each scene</small></div></button>
+            <button className="topic-card" onClick={()=>setPage("Media")}><div className="topic-art art-1"><span>MEDIA LIBRARY</span><b>◉</b></div><div className="topic-body"><h4>Find footage and sound</h4><p>Search Pixabay/Unsplash visuals and built-in free sound effects.</p><small>Choose media for each scene</small></div></button>
             <button className="topic-card" onClick={()=>setPage("Export")}><div className="topic-art art-2"><span>EXPORT</span><b>↗</b></div><div className="topic-body"><h4>Render and download</h4><p>Create a video, thumbnail and metadata pack.</p><small>{voiceBlob?"Voice ready":"Voice not generated yet"}</small></div></button>
           </div>
         </>}
@@ -393,7 +396,7 @@ function App() {
         </section>}
 
         {page==="Media"&&<section className="panel media-panel">
-          <div className="section-heading"><div><h3>Media & Free Sound Studio</h3><p>Search Pixabay/Unsplash visuals or create original sound effects and ambient music locally — no Freesound token or paid sound API needed.</p></div><Layers3 size={22}/></div>
+          <div className="section-heading"><div><h3>Media & Free Sound Studio</h3><p>Search Pixabay/Unsplash visuals or create original sound effects and ambient music locally — no external sound API or token needed.</p></div><Layers3 size={22}/></div>
           <div className="media-toolbar">
             <input className="text-field" value={mediaQuery} onChange={e=>setMediaQuery(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")searchMedia();}} placeholder="Search in English: Earth from space, spaceship, ocean…"/>
             <select className="text-field media-source" value={mediaSource} onChange={e=>setMediaSource(e.target.value as any)}><option>Pixabay</option><option>Unsplash</option><option>Free Sound FX</option></select>
