@@ -256,44 +256,135 @@ export async function generateVoice(apiKey: string, transcript: string, voice = 
   return pcmToWav(bytes, 24000, 1);
 }
 
+const MEDIA_CACHE_TTL = 24 * 60 * 60 * 1000;
+
+function readMediaCache<T>(key: string): T | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const item = JSON.parse(raw);
+    if (!item || Date.now() - Number(item.savedAt) > MEDIA_CACHE_TTL) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return item.data as T;
+  } catch { return null; }
+}
+
+function writeMediaCache<T>(key: string, data: T): void {
+  try { localStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), data })); }
+  catch { /* Storage is optional; search should still work. */ }
+}
+
+async function fetchMediaJson(url: string, provider: string): Promise<any> {
+  let response: Response;
+  try {
+    response = await fetch(url, { method: "GET", mode: "cors" });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      provider + " could not be reached from this browser. This may be a CORS/network block, DNS/VPN filtering or a browser extension. The search phrase is not the cause. Details: " + detail
+    );
+  }
+  if (!response.ok) {
+    throw new Error(provider + " returned HTTP " + response.status + ": " + await readError(response));
+  }
+  try { return await response.json(); }
+  catch { throw new Error(provider + " returned an invalid JSON response."); }
+}
+
 export async function searchPixabay(apiKey: string, query: string): Promise<MediaAsset[]> {
-  if (!apiKey.trim()) throw new Error("Add your Pixabay API key in API Settings.");
-  const q = encodeURIComponent(query.trim().slice(0, 100));
-  const [imagesRes, videosRes] = await Promise.all([
-    fetch("https://pixabay.com/api/?key=" + encodeURIComponent(apiKey.trim()) + "&q=" + q + "&image_type=photo&orientation=vertical&safesearch=true&per_page=12"),
-    fetch("https://pixabay.com/api/videos/?key=" + encodeURIComponent(apiKey.trim()) + "&q=" + q + "&safesearch=true&per_page=12&order=popular")
+  const key = apiKey.trim();
+  const term = query.trim().slice(0, 100);
+  if (!key) throw new Error("Add your Pixabay API key in API Settings.");
+  if (!term) throw new Error("Enter an English search phrase first.");
+
+  const imageCacheKey = "shorts-media-cache:pixabay-images:" + term.toLowerCase();
+  const videoCacheKey = "shorts-media-cache:pixabay-videos:" + term.toLowerCase();
+  const cachedImages = readMediaCache<MediaAsset[]>(imageCacheKey);
+  const cachedVideos = readMediaCache<MediaAsset[]>(videoCacheKey);
+  if (cachedImages || cachedVideos) return [...(cachedImages || []), ...(cachedVideos || [])];
+
+  const q = encodeURIComponent(term);
+  const imageUrl = "https://pixabay.com/api/?key=" + encodeURIComponent(key) +
+    "&q=" + q + "&lang=en&image_type=photo&orientation=vertical&safesearch=true&per_page=12&order=popular";
+  const videoUrl = "https://pixabay.com/api/videos/?key=" + encodeURIComponent(key) +
+    "&q=" + q + "&lang=en&safesearch=true&per_page=12&order=popular";
+
+  // Keep whichever endpoint responds. One failed endpoint must not erase
+  // successful results from the other endpoint.
+  const [imageResult, videoResult] = await Promise.allSettled([
+    cachedImages ? Promise.resolve(null) : fetchMediaJson(imageUrl, "Pixabay image search"),
+    cachedVideos ? Promise.resolve(null) : fetchMediaJson(videoUrl, "Pixabay video search")
   ]);
-  if (!imagesRes.ok) throw new Error("Pixabay images (" + imagesRes.status + "): " + await readError(imagesRes));
-  if (!videosRes.ok) throw new Error("Pixabay videos (" + videosRes.status + "): " + await readError(videosRes));
-  const [images, videos] = await Promise.all([imagesRes.json(), videosRes.json()]);
-  const imageAssets: MediaAsset[] = (images.hits || []).map((hit: any) => ({
-    id: "pix-img-" + hit.id, source: "Pixabay", kind: "image",
-    title: hit.tags || "Pixabay image", thumbnail: hit.webformatURL || hit.previewURL,
-    url: hit.largeImageURL || hit.webformatURL, pageUrl: hit.pageURL,
-    credit: "Pixabay / " + (hit.user || "Contributor"), license: "Pixabay Content License"
-  }));
-  const videoAssets: MediaAsset[] = (videos.hits || []).map((hit: any) => {
-    const variants = hit.videos || {};
-    const best = variants.large || variants.medium || variants.small || variants.tiny;
-    return {
-      id: "pix-vid-" + hit.id, source: "Pixabay", kind: "video",
-      title: hit.tags || "Pixabay video", thumbnail: best?.thumbnail,
-      url: best?.url || hit.pageURL, pageUrl: hit.pageURL,
-      credit: "Pixabay / " + (hit.user || "Contributor"), license: "Pixabay Content License", duration: hit.duration
-    };
-  });
-  return [...imageAssets, ...videoAssets];
+
+  let images = cachedImages || [];
+  let videos = cachedVideos || [];
+  const errors: string[] = [];
+
+  if (!cachedImages) {
+    if (imageResult.status === "fulfilled" && imageResult.value) {
+      images = (imageResult.value.hits || []).map((hit: any): MediaAsset => ({
+        id: "pix-img-" + hit.id, source: "Pixabay", kind: "image",
+        title: hit.tags || "Pixabay image",
+        thumbnail: hit.webformatURL || hit.previewURL,
+        url: hit.largeImageURL || hit.webformatURL, pageUrl: hit.pageURL,
+        credit: "Pixabay / " + (hit.user || "Contributor"),
+        license: "Pixabay Content License"
+      }));
+      writeMediaCache(imageCacheKey, images);
+    } else if (imageResult.status === "rejected") {
+      errors.push(imageResult.reason instanceof Error ? imageResult.reason.message : "Pixabay image search failed.");
+    }
+  }
+
+  if (!cachedVideos) {
+    if (videoResult.status === "fulfilled" && videoResult.value) {
+      videos = (videoResult.value.hits || []).map((hit: any): MediaAsset => {
+        const variants = hit.videos || {};
+        const best = variants.large || variants.medium || variants.small || variants.tiny;
+        return {
+          id: "pix-vid-" + hit.id, source: "Pixabay", kind: "video",
+          title: hit.tags || "Pixabay video", thumbnail: best?.thumbnail,
+          url: best?.url || hit.pageURL, pageUrl: hit.pageURL,
+          credit: "Pixabay / " + (hit.user || "Contributor"),
+          license: "Pixabay Content License", duration: hit.duration
+        };
+      });
+      writeMediaCache(videoCacheKey, videos);
+    } else if (videoResult.status === "rejected") {
+      errors.push(videoResult.reason instanceof Error ? videoResult.reason.message : "Pixabay video search failed.");
+    }
+  }
+
+  const results = [...images, ...videos];
+  if (results.length) return results;
+  if (errors.length) throw new Error(errors.join(" | ") +
+    " Check the Pixabay API key and allow this site through any privacy/ad-block extension.");
+  return [];
 }
 
 export async function searchUnsplash(apiKey: string, query: string): Promise<MediaAsset[]> {
-  if (!apiKey.trim()) throw new Error("Add your Unsplash Access Key in API Settings.");
-  const params = new URLSearchParams({ query, per_page: "12", orientation: "portrait", content_filter: "high" });
-  const response = await fetch("https://api.unsplash.com/search/photos?" + params, {
-    headers: { Authorization: "Client-ID " + apiKey.trim(), "Accept-Version": "v1" }
+  const key = apiKey.trim();
+  const term = query.trim();
+  if (!key) throw new Error("Add your Unsplash Access Key in API Settings.");
+  if (!term) throw new Error("Enter an English search phrase first.");
+
+  const cacheKey = "shorts-media-cache:unsplash:" + term.toLowerCase();
+  const cached = readMediaCache<MediaAsset[]>(cacheKey);
+  if (cached) return cached;
+
+  // Use the documented client_id query parameter on a GET request to avoid
+  // triggering an extra CORS preflight with a custom Authorization header.
+  const params = new URLSearchParams({
+    client_id: key, query: term, per_page: "12",
+    orientation: "portrait", content_filter: "high"
   });
-  if (!response.ok) throw new Error("Unsplash (" + response.status + "): " + await readError(response));
-  const data = await response.json();
-  return (data.results || []).map((photo: any) => ({
+  const data = await fetchMediaJson(
+    "https://api.unsplash.com/search/photos?" + params.toString(),
+    "Unsplash search"
+  );
+  const results: MediaAsset[] = (data.results || []).map((photo: any): MediaAsset => ({
     id: "unsplash-" + photo.id, source: "Unsplash", kind: "image",
     title: photo.alt_description || photo.description || "Unsplash photograph",
     thumbnail: photo.urls?.small, url: photo.urls?.regular || photo.urls?.full,
@@ -301,11 +392,8 @@ export async function searchUnsplash(apiKey: string, query: string): Promise<Med
     credit: "Photo by " + (photo.user?.name || photo.user?.username || "Unsplash photographer") + " on Unsplash",
     license: "Unsplash License", downloadLocation: photo.links?.download_location
   }));
-}
-
-export async function trackUnsplashDownload(apiKey: string, location?: string): Promise<void> {
-  if (!apiKey.trim() || !location) return;
-  await fetch(location, { headers: { Authorization: "Client-ID " + apiKey.trim(), "Accept-Version": "v1" } });
+  writeMediaCache(cacheKey, results);
+  return results;
 }
 
 export function saveBlob(blob: Blob, filename: string): void {
