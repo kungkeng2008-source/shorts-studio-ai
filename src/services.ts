@@ -131,7 +131,7 @@ function pcmToWav(pcm: Uint8Array, sampleRate = 24000, channels = 1): Blob {
   view.setUint16(34, 16, true);
   write(36, "data");
   view.setUint32(40, pcm.length, true);
-  return new Blob([header, pcm], { type: "audio/wav" });
+  return new Blob([header, pcm.slice().buffer as ArrayBuffer], { type: "audio/wav" });
 }
 
 function findAudioPart(data: any): { encoded: string; mimeType?: string } | null {
@@ -160,9 +160,10 @@ export async function generateVoice(apiKey: string, transcript: string, voice = 
     store: false
   });
   const audio = findAudioPart(data);
+  if (!audio) throw new Error("Gemini TTS response did not contain audio data.");
   const bytes = base64ToBytes(audio.encoded);
   if (audio.mimeType?.includes("wav") || (bytes[0] === 82 && bytes[1] === 73 && bytes[2] === 70 && bytes[3] === 70)) {
-    return new Blob([bytes], { type: "audio/wav" });
+    return new Blob([bytes.slice().buffer as ArrayBuffer], { type: "audio/wav" });
   }
   return pcmToWav(bytes, 24000, 1);
 }
