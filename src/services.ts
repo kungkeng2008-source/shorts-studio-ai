@@ -21,391 +21,150 @@ export type VideoProject = {
 
 export type MediaAsset = {
   id: string;
-  source: "Pixabay" | "Unsplash" | "Built-in";
-  kind: "image" | "video" | "audio";
+  source: "Built-in";
+  kind: "audio";
   title: string;
   thumbnail?: string;
   url: string;
-  pageUrl?: string;
   credit?: string;
   license?: string;
-  downloadLocation?: string;
-  duration?: number;
   presetId?: string;
 };
 
-async function readError(response: Response): Promise<string> {
-  const raw = await response.text();
-  try {
-    const parsed = JSON.parse(raw);
-    return parsed?.error?.message || parsed?.message || parsed?.errors?.join?.("; ") || raw || response.statusText;
-  } catch {
-    return raw || response.statusText;
+const EARTH_SPIN_SCENES: Omit<Scene, "duration">[] = [
+  {
+    title: "The Five-Second Pause",
+    narration: "Imagine Earth’s rotation stopping instantly for just five seconds. Would everything around you stop too? No. The ground might stop in this thought experiment, but motion would not simply disappear.",
+    visual: "A detailed blue Earth floating in deep space, rotating slowly. A bright five-second countdown appears, then the rotation freezes while small motion lines continue around the planet.",
+    overlayText: "WHAT IF EARTH STOPPED?"
+  },
+  {
+    title: "The Speed We Never Feel",
+    narration: "At the equator, Earth’s surface moves eastward at about one thousand six hundred seventy kilometres per hour. We do not notice because the atmosphere, oceans and everything around us move with the planet.",
+    visual: "Isometric Earth with glowing equator, latitude lines and a clear eastward rotation arrow. Show a clean 1,670 kilometres per hour data callout.",
+    overlayText: "1,670 KM/H AT THE EQUATOR"
+  },
+  {
+    title: "Inertia Takes Over",
+    narration: "If the solid Earth stopped suddenly, the air, oceans and loose objects would tend to keep moving eastward because of inertia. The difference in motion would be devastating.",
+    visual: "Cutaway illustration of Earth’s surface, ocean and atmosphere. Layered arrows show the atmosphere and water continuing east while the surface is marked as paused.",
+    overlayText: "INERTIA DOESN’T STOP"
+  },
+  {
+    title: "The Atmosphere Keeps Moving",
+    narration: "The atmosphere would not instantly stop with the ground. Powerful relative winds and huge ocean movement would develop. Their exact effects would depend on how such an impossible stop happened.",
+    visual: "Scientific cutaway of the planet with moving air streams and ocean currents. Use directional arrows and labels; avoid inventing exact wind-speed numbers.",
+    overlayText: "AIR AND OCEANS KEEP MOVING"
+  },
+  {
+    title: "When the Spin Returns",
+    narration: "After five seconds, restarting Earth’s rotation would not neatly reset everything. Moving air, water and the surface would interact in a complex chain of effects.",
+    visual: "Earth’s rotation arrow lights up again. Atmospheric and ocean motion vectors overlap, followed by a restrained dramatic global view.",
+    overlayText: "FIVE SECONDS LATER…"
+  },
+  {
+    title: "The Real Takeaway",
+    narration: "This is an impossible thought experiment, not a precise forecast. It reveals one simple truth: we are already moving with Earth, and inertia is why we do not feel that motion.",
+    visual: "Return to a calm, beautifully lit Earth in space. Rotation lines become visible, then fade into a final question card inviting viewers to think.",
+    overlayText: "WE’RE MOVING RIGHT NOW"
   }
-}
+];
 
-function normalizeApiKey(value: string, provider: string): string {
-  // Remove harmless copy/paste artifacts: Unicode whitespace, zero-width
-  // formatting marks, a BOM, and quotation marks around the key.
-  const normalized = value
-    .normalize("NFKC")
-    .replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, "")
-    .trim()
-    .replace(/^["'“”‘’]+|["'“”‘’]+$/g, "")
-    .replace(/[\s\u00A0]+/g, "");
-
-  if (!normalized) {
-    throw new Error("Add your " + provider + " API key in API & Settings.");
+const EARTH_SPIN_SCENES_VI: Omit<Scene, "duration">[] = [
+  {
+    title: "Khoảnh khắc Trái Đất dừng lại",
+    narration: "Hãy tưởng tượng Trái Đất đột ngột ngừng quay trong đúng năm giây. Mọi thứ xung quanh có dừng lại theo không? Không. Chuyển động sẽ không tự biến mất chỉ vì mặt đất dừng lại trong giả thuyết này.",
+    visual: "Trái Đất xanh chi tiết giữa không gian, quay chậm. Đồng hồ đếm ngược năm giây xuất hiện; hành tinh dừng lại nhưng các vệt chuyển động xung quanh vẫn tiếp tục.",
+    overlayText: "NẾU TRÁI ĐẤT NGỪNG QUAY?"
+  },
+  {
+    title: "Tốc độ ta không cảm nhận",
+    narration: "Ở đường xích đạo, bề mặt Trái Đất di chuyển về phía đông với tốc độ khoảng một nghìn sáu trăm bảy mươi ki-lô-mét mỗi giờ. Ta không nhận ra vì khí quyển, đại dương và mọi thứ xung quanh cùng chuyển động với hành tinh.",
+    visual: "Minh họa Trái Đất kiểu isometric với đường xích đạo phát sáng, các vĩ tuyến và mũi tên quay về phía đông. Hiển thị số liệu 1.670 km/h.",
+    overlayText: "1.670 KM/H Ở XÍCH ĐẠO"
+  },
+  {
+    title: "Quán tính tiếp tục tác động",
+    narration: "Nếu phần rắn của Trái Đất đột ngột dừng lại, không khí, đại dương và các vật thể tự do vẫn có xu hướng tiếp tục chuyển động về phía đông do quán tính. Sự chênh lệch chuyển động này sẽ gây hậu quả khủng khiếp.",
+    visual: "Minh họa cắt lớp bề mặt, đại dương và khí quyển. Các mũi tên thể hiện không khí và nước tiếp tục chuyển động về phía đông.",
+    overlayText: "QUÁN TÍNH KHÔNG DỪNG LẠI"
+  },
+  {
+    title: "Khí quyển vẫn chuyển động",
+    narration: "Khí quyển sẽ không lập tức dừng lại cùng mặt đất. Gió tương đối cực mạnh và chuyển động đại dương khổng lồ có thể xuất hiện. Tác động chính xác còn phụ thuộc vào cách tình huống bất khả thi này xảy ra.",
+    visual: "Minh họa khoa học cắt lớp hành tinh với luồng khí và dòng hải lưu. Không tự tạo số liệu tốc độ gió.",
+    overlayText: "KHÔNG KHÍ VÀ ĐẠI DƯƠNG VẪN CHẠY"
+  },
+  {
+    title: "Khi Trái Đất quay trở lại",
+    narration: "Sau năm giây, việc khởi động lại vòng quay không thể đưa mọi thứ trở về trạng thái ban đầu một cách đơn giản. Không khí, nước và bề mặt sẽ tương tác theo một chuỗi tác động phức tạp.",
+    visual: "Mũi tên quay của Trái Đất sáng trở lại. Các vector chuyển động của khí quyển và đại dương giao nhau.",
+    overlayText: "SAU NĂM GIÂY…"
+  },
+  {
+    title: "Điều thực sự đáng suy nghĩ",
+    narration: "Đây là một giả thuyết bất khả thi, không phải dự báo chính xác. Nó cho thấy một điều đơn giản: chúng ta đang chuyển động cùng Trái Đất, và quán tính khiến ta không cảm nhận được điều đó.",
+    visual: "Trở lại hình ảnh Trái Đất bình yên giữa không gian. Các đường chuyển động hiện lên rồi mờ dần ở khung kết.",
+    overlayText: "CHÚNG TA ĐANG CHUYỂN ĐỘNG"
   }
-  // Google API keys are ASCII strings. This check runs after harmless
-  // invisible Unicode formatting and whitespace characters are removed.
-  if (/[^\x21-\x7E]/.test(normalized)) {
-    throw new Error(
-      provider + " API key still contains a non-standard character. Clear the field and paste only the raw API key, without labels or extra text."
-    );
+];
+
+function distributeDuration(totalSeconds: number, count: number): number[] {
+  const total = Math.max(count * 2, totalSeconds);
+  const base = Math.floor(total / count);
+  const remainder = total - base * count;
+  return Array.from({ length: count }, (_, index) => base + (index < remainder ? 1 : 0));
+}
+
+function titleFromTopic(topic: string): string {
+  const clean = topic.trim().replace(/[?!.\s]+$/, "");
+  return clean ? clean.charAt(0).toUpperCase() + clean.slice(1) : "What If Earth Stopped Spinning?";
+}
+
+function makeGenericScenes(topic: string, language: string): Omit<Scene, "duration">[] {
+  const subject = titleFromTopic(topic);
+  if (language === "Vietnamese") {
+    return [
+      { title: "Câu hỏi khiến bạn tò mò", narration: "Điều gì thực sự xảy ra khi " + subject.toLowerCase() + "? Câu trả lời có thể khác xa điều bạn đang tưởng tượng.", visual: "Mở đầu bằng hình minh họa nổi bật về chủ đề: " + subject + ". Tạo chuyển động camera tiến gần và một điểm nhấn bất ngờ.", overlayText: "ĐIỀU GÌ SẼ XẢY RA?" },
+      { title: "Bắt đầu từ điều cơ bản", narration: "Trước tiên, hãy hiểu nguyên lý hoặc sự thật nền tảng đứng sau câu hỏi này.", visual: "Minh họa trực quan khái niệm chính liên quan đến " + subject + "; dùng các lớp, nhãn và mũi tên dễ hiểu.", overlayText: "ĐIỀU CƠ BẢN" },
+      { title: "Chi tiết ít người để ý", narration: "Điểm đáng chú ý nằm ở chi tiết mà nhiều người thường bỏ qua. Hãy nhìn kỹ điều đang diễn ra.", visual: "Phóng to một chi tiết quan trọng của " + subject + "; làm nổi bật sự thay đổi bằng đường viền phát sáng.", overlayText: "CHI TIẾT BẤT NGỜ" },
+      { title: "Điều gì xảy ra tiếp theo?", narration: "Khi các yếu tố này kết hợp với nhau, kết quả sẽ phụ thuộc vào điều kiện cụ thể.", visual: "Dùng sơ đồ từng bước để cho thấy mối liên hệ giữa các yếu tố, tránh đưa số liệu chưa được kiểm chứng.", overlayText: "KẾT QUẢ LÀ GÌ?" },
+      { title: "Kiểm tra giả định", narration: "Một hình dung hấp dẫn chưa chắc đã là sự thật. Cần phân biệt điều đã được xác nhận với giả thuyết.", visual: "Hiển thị hai thẻ: sự thật đã kiểm chứng và giả thuyết cần kiểm tra.", overlayText: "SỰ THẬT HAY GIẢ THUYẾT?" },
+      { title: "Kết luận", narration: "Điều quan trọng nhất cần nhớ về " + subject.toLowerCase() + " là hãy hiểu nguyên lý trước khi tin vào một kết luận gây sốc.", visual: "Kết thúc bằng một hình ảnh cô đọng về chủ đề và một câu hỏi ngắn dành cho người xem.", overlayText: "BẠN NGHĨ SAO?" }
+    ];
   }
-  return normalized;
+  return [
+    { title: "The curiosity hook", narration: "What really happens when it comes to " + subject + "? The answer may be very different from what you imagine.", visual: "Open with a striking locally illustrated visual for: " + subject + ". Use a quick camera push-in and one surprising visual cue.", overlayText: "WHAT REALLY HAPPENS?" },
+    { title: "The basic principle", narration: "First, understand the basic principle behind the question. It gives us the foundation for everything that follows.", visual: "Show a clear, labelled visual explaining the core idea behind " + subject + ".", overlayText: "START WITH THE BASICS" },
+    { title: "The overlooked detail", narration: "Now look closer. One small detail changes how we understand the whole situation.", visual: "Zoom into one important detail connected to " + subject + "; highlight it with a bright outline and callout.", overlayText: "THE DETAIL YOU MISSED" },
+    { title: "What happens next?", narration: "When these factors interact, the result depends on the exact conditions. Let’s separate what we know from what we are assuming.", visual: "Use a step-by-step diagram with arrows connecting the factors. Do not invent numbers or unsupported claims.", overlayText: "FOLLOW THE CONSEQUENCES" },
+    { title: "Fact or assumption?", narration: "A dramatic idea is not automatically a fact. The important question is which parts are supported by evidence and which remain hypothetical.", visual: "Show two clean cards: VERIFIED FACT and HYPOTHESIS TO CHECK.", overlayText: "FACT OR HYPOTHESIS?" },
+    { title: "The takeaway", narration: "That is the key idea to remember about " + subject + ". Understanding the principle matters more than believing the most dramatic version.", visual: "End on a clear hero illustration about " + subject + ", followed by a concise viewer question.", overlayText: "WHAT DO YOU THINK?" }
+  ];
 }
 
-async function createInteraction(apiKey: string, body: Record<string, unknown>): Promise<any> {
-  const cleanKey = normalizeApiKey(apiKey, "Gemini");
-  let response: Response;
-  try {
-    response = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": cleanKey,
-      },
-      body: JSON.stringify(body)
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (/headers|RequestInit|ISO-8859-1|ByteString/i.test(message)) {
-      throw new Error("The Gemini API key contains unsupported characters. Open API & Settings, clear the Gemini field, paste the plain API key again, and save.");
-    }
-    throw new Error("Could not contact Gemini. Check your internet connection and try again. " + message);
-  }
-  if (!response.ok) throw new Error("Gemini API (" + response.status + "): " + await readError(response));
-  return response.json();
-}
-
-function interactionText(data: any): string {
-  if (typeof data.output_text === "string" && data.output_text.trim()) return data.output_text.trim();
-  const contents = (data.steps || []).flatMap((step: any) => step.content || []);
-  const text = contents.filter((part: any) => part.type === "text" && part.text).map((part: any) => part.text).join("\n");
-  if (text.trim()) return text.trim();
-  throw new Error("Gemini returned a response without text. Try again or check the selected model.");
-}
-
-export async function geminiText(apiKey: string, prompt: string): Promise<string> {
-  const data = await createInteraction(apiKey, {
-    model: "gemini-3.6-flash",
-    input: prompt,
-    store: false,
-    generation_config: { temperature: 0.85 }
-  });
-  return interactionText(data);
-}
-
-export function extractJson<T>(raw: string): T {
-  const cleaned = raw.trim();
-  const start = cleaned.indexOf("{");
-  const end = cleaned.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new Error("Could not read JSON from Gemini. Generate again.");
-  return JSON.parse(cleaned.slice(start, end + 1)) as T;
-}
-
-function topicTerms(topic: string): string[] {
-  const stopWords = new Set([
-    "why","what","when","where","who","how","does","do","did","is","are","was","were",
-    "the","a","an","and","or","but","for","to","of","in","on","at","by","with","from",
-    "have","has","had","can","could","would","should","will","if","than","then","this",
-    "that","these","those","it","its","your","you","we","they","their","our","about",
-    "tại","sao","vì","như","thế","nào","là","có","của","và","hay","hoặc","khi","nếu",
-    "một","những","các","được","bị","thì","ra","sẽ","đã","đang","gì","ai","đâu"
-  ]);
-  return Array.from(new Set(topic
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .match(/[a-z0-9]+/g) || []
-  )).filter(word => word.length > 1 && !stopWords.has(word));
-}
-
-function projectMatchesTopic(project: VideoProject, topic: string): boolean {
-  const terms = topicTerms(topic);
-  if (!terms.length) return true;
-  const content = [
-    project.title, project.hook, project.description,
-    ...(project.scenes || []).flatMap(scene => [
-      scene.title, scene.narration, scene.visual, scene.overlayText
-    ])
-  ].join(" ").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  const matches = terms.filter(term => content.includes(term)).length;
-  const required = terms.length <= 2 ? 1 : 2;
-  return matches >= required;
-}
-
-export async function generateProject(apiKey: string, topic: string, style: string, language: string, duration: number): Promise<VideoProject> {
-  const corePrompt =
-    "You are a YouTube Shorts science storyteller, visual director and fact-checking editor.\n" +
-    "LOCKED VIDEO TOPIC (must not be changed): " + JSON.stringify(topic) + ".\n" +
-    "Every title, hook, scene, narration and visual direction MUST explain this exact topic. Do not substitute a different What If scenario or reuse a previous project. Do not change the subject to Earth, space, planets or another topic unless that is explicitly the requested topic.\n" +
-    "Create one original, high-retention " + duration + "-second vertical video about the locked topic above.\n" +
-    "Audience: international viewers. Output language: " + language + ". Visual style: " + style + ".\n" +
-    "Priorities: a precise curiosity gap in the first 1-2 seconds; fast but understandable progression; one satisfying payoff; a reveal or meaningful visual change every few seconds. Avoid false claims, fake statistics, invented sources, filler and generic engagement bait.\n" +
-    "For hypothetical scenarios, clearly distinguish assumptions from established science. For factual claims, use cautious wording if the premise is uncertain. Do not invent citations or dates.\n" +
-    "Return ONLY valid JSON with this structure: { title, hook, description, hashtags, pinnedComment, scenes }.\n" +
-    "scenes must be an array of 5-7 items. Each item must have title, narration, visual, overlayText, duration. Total duration should be close to " + duration + " seconds. Narration must fit natural speech. Add a question or visual surprise early, escalate the stakes, then deliver the payoff.\n" +
-    "Before returning, verify that every scene is about the LOCKED VIDEO TOPIC and that the title clearly names the requested subject.";
-  const parseAndNormalize = (rawText: string): VideoProject => {
-    const result = extractJson<VideoProject>(rawText);
-    if (!Array.isArray(result.scenes) || result.scenes.length < 2) {
-      throw new Error("The generated storyboard does not contain enough scenes. Generate again.");
-    }
-    result.scenes = result.scenes.map((scene, index) => ({
-      title: scene.title || "Scene " + (index + 1),
-      narration: scene.narration || "",
-      visual: scene.visual || "",
-      overlayText: scene.overlayText || "",
-      duration: Math.max(2, Number(scene.duration) || 5)
-    }));
-    return result;
+export function generateLocalProject(topic: string, style: string, language: string, duration: number): VideoProject {
+  const cleanTopic = topic.trim() || "What if Earth suddenly stopped spinning for five seconds?";
+  const isEarthSpin = /earth|trái đất/i.test(cleanTopic) && /(spin|rotat|quay|ngừng)/i.test(cleanTopic);
+  const template = isEarthSpin
+    ? (language === "Vietnamese" ? EARTH_SPIN_SCENES_VI : EARTH_SPIN_SCENES)
+    : makeGenericScenes(cleanTopic, language);
+  const durations = distributeDuration(duration, template.length);
+  const scenes: Scene[] = template.map((scene, index) => ({ ...scene, duration: durations[index] }));
+  const title = isEarthSpin
+    ? (language === "Vietnamese" ? "Nếu Trái Đất ngừng quay trong 5 giây?" : "What If Earth Stopped Spinning for 5 Seconds?")
+    : titleFromTopic(cleanTopic);
+  const hook = scenes[0]?.narration || cleanTopic;
+  const slugWords = cleanTopic.toLowerCase().match(/[a-z0-9]+/g) || ["whatif", "science"];
+  const hashtags = Array.from(new Set(["#WhatIf", "#Science", ...slugWords.slice(0, 3).map(word => "#" + word]));
+  return {
+    title,
+    hook,
+    description: "A short, locally generated explainer about " + cleanTopic + ". This is a starter script template. Check every factual claim and add reliable sources before publishing.",
+    hashtags,
+    pinnedComment: "What should we explore next? Leave your question below.",
+    scenes
   };
-
-  let project = parseAndNormalize(await geminiText(apiKey, corePrompt));
-
-  // If Gemini ignores the requested subject, automatically retry once instead
-  // of silently accepting a storyboard for the wrong video topic.
-  if (!projectMatchesTopic(project, topic)) {
-    const correction =
-      corePrompt +
-      "\n\nCORRECTION: Your previous response was about the wrong subject. The user's requested topic is exactly " +
-      JSON.stringify(topic) +
-      ". Discard the previous answer and write a completely new storyboard only about this exact topic. Do not reuse unrelated scenes.";
-    project = parseAndNormalize(await geminiText(apiKey, correction));
-    if (!projectMatchesTopic(project, topic)) {
-      throw new Error("Gemini returned a storyboard that does not match your topic. No wrong-topic project was saved. Please generate again.");
-    }
-  }
-
-  return project;
-}
-
-function base64ToBytes(base64: string): Uint8Array {
-  const binary = atob(base64.replace(/\s/g, ""));
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
-
-function pcmToWav(pcm: Uint8Array, sampleRate = 24000, channels = 1): Blob {
-  const header = new ArrayBuffer(44);
-  const view = new DataView(header);
-  const write = (offset: number, value: string) => {
-    for (let i = 0; i < value.length; i++) view.setUint8(offset + i, value.charCodeAt(i));
-  };
-  write(0, "RIFF");
-  view.setUint32(4, 36 + pcm.length, true);
-  write(8, "WAVE");
-  write(12, "fmt ");
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, channels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * channels * 2, true);
-  view.setUint16(32, channels * 2, true);
-  view.setUint16(34, 16, true);
-  write(36, "data");
-  view.setUint32(40, pcm.length, true);
-  return new Blob([header, pcm.slice().buffer as ArrayBuffer], { type: "audio/wav" });
-}
-
-function findAudioPart(data: any): { encoded: string; mimeType?: string } | null {
-  if (data.output_audio?.data) return { encoded: data.output_audio.data, mimeType: data.output_audio.mime_type || data.output_audio.mimeType };
-  for (const step of data.steps || []) {
-    for (const part of step.content || []) {
-      if (part.type === "audio" && (part.data || part.audio?.data)) {
-        return { encoded: part.data || part.audio.data, mimeType: part.mime_type || part.mimeType || part.audio?.mime_type };
-      }
-      if (part.inline_data?.data || part.inlineData?.data) {
-        const item = part.inline_data || part.inlineData;
-        return { encoded: item.data, mimeType: item.mime_type || item.mimeType };
-      }
-    }
-  }
-  throw new Error("Gemini TTS response did not contain audio data.");
-}
-
-export async function generateVoice(apiKey: string, transcript: string, voice = "Kore", style = "clear, engaging documentary narration, medium pace"): Promise<Blob> {
-  if (!transcript.trim()) throw new Error("There is no narration to voice.");
-  const data = await createInteraction(apiKey, {
-    model: "gemini-3.1-flash-tts-preview",
-    input: "Speak the following narration in a " + style + ". Read only the words between the transcript markers. Use natural pauses and clear pronunciation.\nTRANSCRIPT START\n" + transcript + "\nTRANSCRIPT END",
-    response_format: { type: "audio" },
-    generation_config: { speech_config: [{ voice }] },
-    store: false
-  });
-  const audio = findAudioPart(data);
-  if (!audio) throw new Error("Gemini TTS response did not contain audio data.");
-  const bytes = base64ToBytes(audio.encoded);
-  if (audio.mimeType?.includes("wav") || (bytes[0] === 82 && bytes[1] === 73 && bytes[2] === 70 && bytes[3] === 70)) {
-    return new Blob([bytes.slice().buffer as ArrayBuffer], { type: "audio/wav" });
-  }
-  return pcmToWav(bytes, 24000, 1);
-}
-
-const MEDIA_CACHE_TTL = 24 * 60 * 60 * 1000;
-
-function readMediaCache<T>(key: string): T | null {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    const item = JSON.parse(raw);
-    if (!item || Date.now() - Number(item.savedAt) > MEDIA_CACHE_TTL) {
-      localStorage.removeItem(key);
-      return null;
-    }
-    return item.data as T;
-  } catch { return null; }
-}
-
-function writeMediaCache<T>(key: string, data: T): void {
-  try { localStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), data })); }
-  catch { /* Storage is optional; search should still work. */ }
-}
-
-async function fetchMediaJson(url: string, provider: string): Promise<any> {
-  let response: Response;
-  try {
-    response = await fetch(url, { method: "GET", mode: "cors" });
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      provider + " could not be reached from this browser. This may be a CORS/network block, DNS/VPN filtering or a browser extension. The search phrase is not the cause. Details: " + detail
-    );
-  }
-  if (!response.ok) {
-    throw new Error(provider + " returned HTTP " + response.status + ": " + await readError(response));
-  }
-  try { return await response.json(); }
-  catch { throw new Error(provider + " returned an invalid JSON response."); }
-}
-
-export async function searchPixabay(apiKey: string, query: string): Promise<MediaAsset[]> {
-  const key = apiKey.trim();
-  const term = query.trim().slice(0, 100);
-  if (!key) throw new Error("Add your Pixabay API key in API Settings.");
-  if (!term) throw new Error("Enter an English search phrase first.");
-
-  const imageCacheKey = "shorts-media-cache:pixabay-images:" + term.toLowerCase();
-  const videoCacheKey = "shorts-media-cache:pixabay-videos:" + term.toLowerCase();
-  const cachedImages = readMediaCache<MediaAsset[]>(imageCacheKey);
-  const cachedVideos = readMediaCache<MediaAsset[]>(videoCacheKey);
-  if (cachedImages !== null && cachedVideos !== null) return [...cachedImages, ...cachedVideos];
-
-  const q = encodeURIComponent(term);
-  const imageUrl = "https://pixabay.com/api/?key=" + encodeURIComponent(key) +
-    "&q=" + q + "&lang=en&image_type=photo&orientation=vertical&safesearch=true&per_page=12&order=popular";
-  const videoUrl = "https://pixabay.com/api/videos/?key=" + encodeURIComponent(key) +
-    "&q=" + q + "&lang=en&safesearch=true&per_page=12&order=popular";
-
-  // Keep whichever endpoint responds. One failed endpoint must not erase
-  // successful results from the other endpoint.
-  const [imageResult, videoResult] = await Promise.allSettled([
-    cachedImages ? Promise.resolve(null) : fetchMediaJson(imageUrl, "Pixabay image search"),
-    cachedVideos ? Promise.resolve(null) : fetchMediaJson(videoUrl, "Pixabay video search")
-  ]);
-
-  let images = cachedImages || [];
-  let videos = cachedVideos || [];
-  const errors: string[] = [];
-
-  if (!cachedImages) {
-    if (imageResult.status === "fulfilled" && imageResult.value) {
-      images = (imageResult.value.hits || []).map((hit: any): MediaAsset => ({
-        id: "pix-img-" + hit.id, source: "Pixabay", kind: "image",
-        title: hit.tags || "Pixabay image",
-        thumbnail: hit.webformatURL || hit.previewURL,
-        url: hit.largeImageURL || hit.webformatURL, pageUrl: hit.pageURL,
-        credit: "Pixabay / " + (hit.user || "Contributor"),
-        license: "Pixabay Content License"
-      }));
-      writeMediaCache(imageCacheKey, images);
-    } else if (imageResult.status === "rejected") {
-      errors.push(imageResult.reason instanceof Error ? imageResult.reason.message : "Pixabay image search failed.");
-    }
-  }
-
-  if (!cachedVideos) {
-    if (videoResult.status === "fulfilled" && videoResult.value) {
-      videos = (videoResult.value.hits || []).map((hit: any): MediaAsset => {
-        const variants = hit.videos || {};
-        const best = variants.large || variants.medium || variants.small || variants.tiny;
-        return {
-          id: "pix-vid-" + hit.id, source: "Pixabay", kind: "video",
-          title: hit.tags || "Pixabay video", thumbnail: best?.thumbnail,
-          url: best?.url || hit.pageURL, pageUrl: hit.pageURL,
-          credit: "Pixabay / " + (hit.user || "Contributor"),
-          license: "Pixabay Content License", duration: hit.duration
-        };
-      });
-      writeMediaCache(videoCacheKey, videos);
-    } else if (videoResult.status === "rejected") {
-      errors.push(videoResult.reason instanceof Error ? videoResult.reason.message : "Pixabay video search failed.");
-    }
-  }
-
-  const results = [...images, ...videos];
-  if (results.length) return results;
-  if (errors.length) throw new Error(errors.join(" | ") +
-    " Check the Pixabay API key and allow this site through any privacy/ad-block extension.");
-  return [];
-}
-
-export async function searchUnsplash(apiKey: string, query: string): Promise<MediaAsset[]> {
-  const key = apiKey.trim();
-  const term = query.trim();
-  if (!key) throw new Error("Add your Unsplash Access Key in API Settings.");
-  if (!term) throw new Error("Enter an English search phrase first.");
-
-  const cacheKey = "shorts-media-cache:unsplash:" + term.toLowerCase();
-  const cached = readMediaCache<MediaAsset[]>(cacheKey);
-  if (cached) return cached;
-
-  // Use the documented client_id query parameter on a GET request to avoid
-  // triggering an extra CORS preflight with a custom Authorization header.
-  const params = new URLSearchParams({
-    client_id: key, query: term, per_page: "12",
-    orientation: "portrait", content_filter: "high"
-  });
-  const data = await fetchMediaJson(
-    "https://api.unsplash.com/search/photos?" + params.toString(),
-    "Unsplash search"
-  );
-  const results: MediaAsset[] = (data.results || []).map((photo: any): MediaAsset => ({
-    id: "unsplash-" + photo.id, source: "Unsplash", kind: "image",
-    title: photo.alt_description || photo.description || "Unsplash photograph",
-    thumbnail: photo.urls?.small, url: photo.urls?.regular || photo.urls?.full,
-    pageUrl: photo.links?.html,
-    credit: "Photo by " + (photo.user?.name || photo.user?.username || "Unsplash photographer") + " on Unsplash",
-    license: "Unsplash License", downloadLocation: photo.links?.download_location
-  }));
-  writeMediaCache(cacheKey, results);
-  return results;
-}
-
-
-export async function trackUnsplashDownload(apiKey: string, location?: string): Promise<void> {
-  if (!apiKey.trim() || !location) return;
-  try {
-    const separator = location.includes("?") ? "&" : "?";
-    const url = location + separator + new URLSearchParams({ client_id: apiKey.trim() }).toString();
-    await fetch(url, { method: "GET", mode: "cors" });
-  } catch {
-    // Tracking is best-effort; do not block attaching the selected photo.
-  }
 }
 
 export function saveBlob(blob: Blob, filename: string): void {
